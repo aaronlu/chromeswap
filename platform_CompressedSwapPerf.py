@@ -63,36 +63,6 @@ def get_selection_funcs(selections):
             if k in selections
            }
 
-def reset_zram():
-    """
-    Resets zram, clearing all swap space.
-    """
-    swapoff_timeout = 60
-    zram_device = 'zram0'
-    zram_device_path = os.path.join('/dev', zram_device)
-    reset_path = os.path.join('/sys/block', zram_device, 'reset')
-    disksize_path = os.path.join('/sys/block', zram_device, 'disksize')
-
-    disksize = utils.read_one_line(disksize_path)
-
-    # swapoff is prone to hanging, especially after heavy swap usage, so
-    # time out swapoff if it takes too long.
-    ret = utils.system('swapoff ' + zram_device_path,
-                       timeout=swapoff_timeout, ignore_status=True)
-
-    if ret != 0:
-        raise error.TestFail('Could not reset zram - swapoff failed.')
-
-    # Sleep to avoid "device busy" errors.
-    time.sleep(1)
-    utils.write_one_line(reset_path, '1')
-    time.sleep(1)
-    utils.write_one_line(disksize_path, disksize)
-    utils.system('mkswap ' + zram_device_path)
-    utils.system('swapon ' + zram_device_path)
-
-swap_reset_funcs = {'zram': reset_zram}
-
 class platform_CompressedSwapPerf(test.test):
     """Runs basic performance benchmarks on compressed swap.
 
@@ -104,8 +74,6 @@ class platform_CompressedSwapPerf(test.test):
     """
     version = 1
     executable = 'hog'
-    swap_enable_file = '/home/chronos/.swap_enabled'
-    swap_disksize_file = '/sys/block/zram0/disksize'
 
     CMD_POKE = 1
     CMD_BALLOON = 2
@@ -179,14 +147,10 @@ class platform_CompressedSwapPerf(test.test):
 
         used_phys_memory = self.mem_total - self.mem_free
 
-        # Get zram's actual compressed size and convert to KiB.
-        swap_phys_size = utils.read_one_line('/sys/block/zram0/compr_data_size')
-        swap_phys_size = int(swap_phys_size) / 1024
-
-        self.total_usage = used_phys_memory - swap_phys_size + self.swap_used
+        self.total_usage = used_phys_memory + self.swap_used
         self.usage_ratio = float(self.swap_used) / self.swap_total
 
-        print "mem_total: %d, swap_total: %d, mem_free: %d, swap_free: %d, swap_used: %d, total_usage: %d, usage_ratio: %f" %(self.mem_total, self.swap_total, self.mem_free, self.swap_free, self.swap_used, self.total_usage, self.usage_ratio)
+        logging.debug ("mem_total: %dK, swap_total: %dK, mem_free: %dK, swap_free: %dK, swap_used: %dK, total_usage: %dK, usage_ratio: %f", self.mem_total, self.swap_total, self.mem_free, self.swap_free, self.swap_used, self.total_usage, self.usage_ratio)
 
     def send_poke(self, hog_sock):
         """Pokes a hog process.
@@ -277,8 +241,7 @@ class platform_CompressedSwapPerf(test.test):
 
         # usage_target is our estimate on the amount of memory that needs to
         # be allocated to reach our target swap usage.
-        swap_target_phys = swap_target_usage / compression_factor
-        usage_target = self.mem_free - swap_target_phys + swap_target_usage
+        usage_target = self.mem_total + swap_target_usage
 
         hogs = []
         paths = []
@@ -307,6 +270,7 @@ class platform_CompressedSwapPerf(test.test):
         while self.usage_ratio <= swap_target:
             free_per_hog = (usage_target - self.total_usage) / len(hogs)
             alloc_per_hog_mb = int(0.80 * free_per_hog) / 1024
+            logging.debug ("usage_ratio: %f, swap_target: %f, usage_target: %dK, total_usage: %dK, free_per_hog: %dK, alloc_per_hog_mb: %dM", self.usage_ratio, swap_target, usage_target, self.total_usage, free_per_hog, alloc_per_hog_mb)
             if alloc_per_hog_mb <= 0:
                 alloc_per_hog_mb = 1
 
@@ -390,7 +354,7 @@ class platform_CompressedSwapPerf(test.test):
                 time.sleep(5)
                 break
 
-    def run_once(self, compression_factor=3, num_procs=50, cycles=20,
+    def run_once(self, compression_factor=1, num_procs=50, cycles=20,
                  selections=None, swap_targets=None, switch_delay=0.0):
         if selections is None:
             selections = ['sequential', 'uniform', 'exponential']
@@ -399,47 +363,10 @@ class platform_CompressedSwapPerf(test.test):
 
         swaptotal = utils.read_from_meminfo('SwapTotal')
 
-        # Check for proper swap space configuration.
-        # If the swap enable file says "0", swap.conf does not create swap.
-        if os.path.exists(self.swap_enable_file):
-            enable_size = utils.read_one_line(self.swap_enable_file)
-        else:
-            enable_size = "nonexistent" # implies nonzero
-        if enable_size == "0":
-            if swaptotal != 0:
-                raise error.TestFail('The swap enable file said 0, but'
-                                     ' swap was still enabled for %d.' %
-                                     swaptotal)
-            logging.info('Swap enable (0), swap disabled.')
-        else:
-            # Rather than parsing swap.conf logic to calculate a size,
-            # use the value it writes to /sys/block/zram0/disksize.
-            if not os.path.exists(self.swap_disksize_file):
-                raise error.TestFail('The %s swap enable file should have'
-                                     ' caused zram to load, but %s was'
-                                     ' not found.' %
-                                     (enable_size, self.swap_disksize_file))
-            disksize = utils.read_one_line(self.swap_disksize_file)
-            swaprequested = int(disksize) / 1000
-            if (swaptotal < swaprequested * 0.9 or
-                swaptotal > swaprequested * 1.1):
-                raise error.TestFail('Our swap of %d K is not within 10%%'
-                                     ' of the %d K we requested.' %
-                                     (swaptotal, swaprequested))
-            logging.info('Swap enable (%s), requested %d, total %d',
-                         enable_size, swaprequested, swaptotal)
-            print "swap total %d, swap requested %d\n" %(swaptotal, swaprequested)
-
-        # We should try to autodetect this if we add other swap methods.
-        swap_method = 'zram'
-
         for swap_target in swap_targets:
             logging.info('swap_target is %f', swap_target)
             temp_dir = tempfile.mkdtemp()
             try:
-                # Reset swap space to make sure nothing leaks between runs.
-                swap_reset = swap_reset_funcs[swap_method]
-                swap_reset()
                 self.run_single_test(compression_factor, num_procs, cycles,
                                      swap_target, switch_delay, temp_dir,
                                      selections)
@@ -448,5 +375,8 @@ class platform_CompressedSwapPerf(test.test):
 
             shutil.rmtree(temp_dir)
 
+#root = logging.getLogger()
+#root.setLevel(logging.DEBUG)
+
 t = platform_CompressedSwapPerf("/home/aaron/src/platform_CompressedSwapPerf", "/tmp")
-t.run_once(3, 50, 20, ['uniform'], [0.25])
+t.run_once(1, 50, 20, ['uniform'], [0.25])

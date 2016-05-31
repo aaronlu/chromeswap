@@ -234,12 +234,12 @@ class base_test(object):
                                tap_report=tap_report)
 
         if perf_dict:
-            perf_dict = self._append_type_to_keys(perf_dict, "perf")
+            #perf_dict = self._append_type_to_keys(perf_dict, "perf")
             utils.write_keyval(self.resultsdir, perf_dict, type_tag="perf",
                                tap_report=tap_report)
 
-        keyval_path = os.path.join(self.resultsdir, "keyval")
-        print >> open(keyval_path, "a"), ""
+        #keyval_path = os.path.join(self.resultsdir, "keyval")
+        #print >> open(keyval_path, "a"), ""
 
 
     def analyze_perf_constraints(self, constraints):
