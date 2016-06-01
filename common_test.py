@@ -32,8 +32,9 @@ class base_test(object):
     def __init__(self, bindir, outputdir):
         self.outputdir = outputdir
         self.tagged_testname = os.path.basename(self.outputdir)
-        self.resultsdir = os.path.join(self.outputdir, 'results')
-        os.mkdir(self.resultsdir)
+        #self.resultsdir = os.path.join(self.outputdir, 'results')
+        self.resultsdir = self.outputdir
+        #os.mkdir(self.resultsdir)
         self.profdir = os.path.join(self.outputdir, 'profiling')
         #os.mkdir(self.profdir)
         self.debugdir = os.path.join(self.outputdir, 'debug')

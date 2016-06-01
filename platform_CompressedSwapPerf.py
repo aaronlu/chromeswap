@@ -378,5 +378,12 @@ class platform_CompressedSwapPerf(test.test):
 #root = logging.getLogger()
 #root.setLevel(logging.DEBUG)
 
-t = platform_CompressedSwapPerf("/home/aaron/src/platform_CompressedSwapPerf", "/tmp")
-t.run_once(1, 50, 20, ['uniform'], [0.25])
+nr_procs = int(os.environ['nr_procs'])
+cycles = int(os.environ['cycles'])
+selection = os.environ['selection']
+swap_targets = float(os.environ['swap_targets'])
+benchmark = os.environ['BENCHMARK_ROOT'] + "/chromeswap"
+result_root = os.environ['RESULT_ROOT']
+
+t = platform_CompressedSwapPerf(benchmark, result_root)
+t.run_once(1, nr_procs, cycles, [selection], [swap_targets])

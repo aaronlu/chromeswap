@@ -527,7 +527,7 @@ def write_keyval(path, dictionary, type_tag=None, tap_report=None):
     @param type_tag: see text above
     """
     if os.path.isdir(path):
-        path = os.path.join(path, 'keyval')
+        path = os.path.join(path, 'chromeswap')
     keyval = open(path, 'a')
 
     if type_tag is None:
