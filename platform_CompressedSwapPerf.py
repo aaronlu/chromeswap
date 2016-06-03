@@ -221,7 +221,7 @@ class platform_CompressedSwapPerf(test.test):
 
         return balloon_result_unpack == alloc_mb
 
-    def run_single_test(self, compression_factor, num_procs, cycles,
+    def run_single_test(self, compression_factor, num_procs, runtime,
                         swap_target, switch_delay, temp_dir, selections):
         """
         Runs the benchmark for a single swap target usage.
@@ -229,7 +229,7 @@ class platform_CompressedSwapPerf(test.test):
         @param compression_factor: Compression factor (int)
                                    example: compression_factor=3 is 1:3 ratio
         @param num_procs: Number of hog processes to use
-        @param cycles: Number of iterations over hogs list for a given swap lvl
+        @param runtime: How long to let hog processes execise TouchMemory
         @param swap_target: Floating point value of target swap usage
         @param switch_delay: Number of seconds to wait between poking hogs
         @param temp_dir: Path of the temporary directory to use
@@ -286,15 +286,16 @@ class platform_CompressedSwapPerf(test.test):
             self.sample_memory_state()
 
         # Once memory is allocated, report how close we got to the swap target.
-        #self.report_stat('percent', swap_target, None,
-        #                 'usage', 'value', self.usage_ratio)
-        print "usage_ratio is: %f" % self.usage_ratio
+        self.report_stat('percent', swap_target, None,
+                         'usage', 'value', self.usage_ratio)
 
         # Run tests by sending "touch memory" command to hogs.
         for f_name, f in get_selection_funcs(selections).iteritems():
             result_list = []
 
-            for count in range(cycles):
+            t1 = time.time()
+            cycles = 0
+            while True:
                 for i in range(len(hogs)):
                     selection = f(i, len(hogs))
                     hog_sock = sockets[selection]
@@ -313,6 +314,11 @@ class platform_CompressedSwapPerf(test.test):
                             result_list.append(result)
                     else:
                         logging.info("Hog died unexpectedly; continuing")
+                cycles += 1
+                t2 = time.time()
+                if t2 - t1 > runtime:
+                    self.report_stat('throughput', swap_targets, f_name, 'cycles', 'per_second', float(cycles) / runtime)
+                    break
 
             # Convert from list of tuples (rtime, utime, stime, faults) to
             # a list of rtimes, a list of utimes, etc.
@@ -355,7 +361,7 @@ class platform_CompressedSwapPerf(test.test):
                 time.sleep(5)
                 break
 
-    def run_once(self, compression_factor=1, num_procs=50, cycles=20,
+    def run_once(self, compression_factor=1, num_procs=50, runtime=300,
                  selections=None, swap_targets=None, switch_delay=0.0):
         if selections is None:
             selections = ['sequential', 'uniform', 'exponential']
@@ -368,7 +374,7 @@ class platform_CompressedSwapPerf(test.test):
             logging.info('swap_target is %f', swap_target)
             temp_dir = tempfile.mkdtemp()
             try:
-                self.run_single_test(compression_factor, num_procs, cycles,
+                self.run_single_test(compression_factor, num_procs, runtime,
                                      swap_target, switch_delay, temp_dir,
                                      selections)
             except socket.error:
@@ -380,11 +386,11 @@ class platform_CompressedSwapPerf(test.test):
 #root.setLevel(logging.DEBUG)
 
 nr_procs = int(os.environ['nr_procs'])
-cycles = int(os.environ['cycles'])
 selection = os.environ['selection']
 swap_targets = float(os.environ['swap_targets'])
 benchmark = os.environ['BENCHMARK_ROOT'] + "/chromeswap"
 result_root = os.environ['RESULT_ROOT']
+runtime = int(os.environ['runtime'])
 
 t = platform_CompressedSwapPerf(benchmark, result_root)
-t.run_once(1, nr_procs, cycles, [selection], [swap_targets])
+t.run_once(1, nr_procs, runtime, [selection], [swap_targets])
