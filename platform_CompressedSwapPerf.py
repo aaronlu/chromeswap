@@ -286,8 +286,9 @@ class platform_CompressedSwapPerf(test.test):
             self.sample_memory_state()
 
         # Once memory is allocated, report how close we got to the swap target.
-        self.report_stat('percent', swap_target, None,
-                         'usage', 'value', self.usage_ratio)
+        #self.report_stat('percent', swap_target, None,
+        #                 'usage', 'value', self.usage_ratio)
+        print "usage_ratio is: %f" % self.usage_ratio
 
         # Run tests by sending "touch memory" command to hogs.
         for f_name, f in get_selection_funcs(selections).iteritems():
