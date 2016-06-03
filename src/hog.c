@@ -213,7 +213,7 @@ int main(int argc, char *argv[]) {
         send(connfd, &balloon_size, sizeof(balloon_size), 0);
         break;
       case CMD_EXIT:
-        fprintf(stderr, "exiting\n");
+	//fprintf(stderr, "exiting\n");
         return 0;
       default:
         fprintf(stderr, "unexpected command: %d\n", command);
