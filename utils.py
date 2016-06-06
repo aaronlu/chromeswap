@@ -541,7 +541,7 @@ def write_keyval(path, dictionary, type_tag=None, tap_report=None):
         for key in sorted(dictionary.keys()):
             #if not key_regex.search(key):
             #    raise ValueError('Invalid key: %s' % key)
-            keyval.write('%s:%s\n' % (key, dictionary[key]))
+            keyval.write('%s: %s\n' % (key, dictionary[key]))
     finally:
         keyval.close()
 
