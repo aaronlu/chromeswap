@@ -317,7 +317,7 @@ class platform_CompressedSwapPerf(test.test):
                 cycles += 1
                 t2 = time.time()
                 if t2 - t1 > runtime:
-                    self.report_stat('throughput', swap_targets, f_name, 'cycles', 'per_second', float(cycles) / runtime)
+                    self.report_stat('throughput', swap_targets, f_name, 'cycles', 'per_second', float(cycles) / (t2 - t1))
                     break
 
             # Convert from list of tuples (rtime, utime, stime, faults) to
